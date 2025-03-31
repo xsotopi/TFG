@@ -1,0 +1,14 @@
+def wait_and_move():
+    socket_open("127.0.0.1", 30003, "move_socket")
+    sleep(1.0)  # Wait for socket to open
+
+    while True:
+        pose = socket_read_ascii_float(6, "move_socket")
+        if pose != []:
+            movel(p[pose[0], pose[1], pose[2], pose[3], pose[4], pose[5]], a=1.2, v=0.25)
+        end
+        sleep(0.1)
+    end
+end
+
+wait_and_move()

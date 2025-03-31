@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Recorder</title>
+    <!-- Load ffmpeg.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.4/dist/ffmpeg.min.js"></script>
+</head>
+<body>
+    <h2>Record and Upload Audio</h2>
+    <button id="recordBtn">Record</button>
+    <button id="stopBtn" disabled>Stop</button>
+    <audio id="audioPlayback" controls></audio>
+    <button id="uploadBtn" disabled>Upload</button>
+    <p id="status"></p>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let ffmpegInstance;
+        let NGROK_URL = "";
+
+        // ✅ Fetch ngrok URL dynamically
+        async function fetchNgrokUrl() {
+            try {
+                const response = await fetch("/get_ngrok_url");
+                const data = await response.json();
+                NGROK_URL = data.url;
+                console.log("Using ngrok URL:", NGROK_URL);
+            } catch (error) {
+                console.error("Error fetching ngrok URL:", error);
+            }
+        }
+
+        // ✅ Load FFmpeg.js when needed
+        async function loadFFmpeg() {
+            const { createFFmpeg, fetchFile } = FFmpeg;
+            const ffmpeg = createFFmpeg({ log: true });
+            await ffmpeg.load();
+            return { ffmpeg, fetchFile };
+        }
+
+        // ✅ Start recording
+        document.getElementById("recordBtn").addEventListener("click", async () => {
+            try {
+                // ✅ Request microphone permission
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // ✅ Clear previous recordings
+                audioChunks = [];
+
+                // ✅ Initialize media recorder
+                mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    document.getElementById("audioPlayback").src = audioUrl;
+
+                    console.log("Recording stopped, converting to MP3...");
+
+                    // ✅ Convert WebM to MP3 in JavaScript
+                    const mp3Blob = await convertWebMtoMP3(audioBlob);
+
+                    // ✅ Enable upload button only after conversion
+                    document.getElementById("uploadBtn").disabled = false;
+                    document.getElementById("uploadBtn").onclick = () => uploadAudio(mp3Blob);
+
+                    console.log("MP3 file ready, upload button enabled.");
+                };
+
+                mediaRecorder.start();
+                document.getElementById("recordBtn").disabled = true;
+                document.getElementById("stopBtn").disabled = false;
+            } catch (error) {
+                console.error("Error accessing microphone:", error);
+                alert("Microphone access denied. Please allow microphone access and reload.");
+            }
+        });
+
+        // ✅ Stop recording
+        document.getElementById("stopBtn").addEventListener("click", () => {
+            if (mediaRecorder) {
+                mediaRecorder.stop();
+                document.getElementById("recordBtn").disabled = false;
+                document.getElementById("stopBtn").disabled = true;
+            }
+        });
+
+        // ✅ Convert WebM to MP3 using ffmpeg.js
+        async function convertWebMtoMP3(webmBlob) {
+            if (!ffmpegInstance) {
+                ffmpegInstance = await loadFFmpeg(); // Ensure ffmpeg.js is loaded
+            }
+
+            const { ffmpeg, fetchFile } = ffmpegInstance;
+            const inputFileName = "input.webm";
+            const outputFileName = "output.mp3";
+
+            try {
+                console.log("Writing WebM file to FFmpeg...");
+                ffmpeg.FS("writeFile", inputFileName, await fetchFile(webmBlob));
+
+                console.log("Running FFmpeg conversion...");
+                await ffmpeg.run("-i", inputFileName, "-q:a", "5", "-acodec", "libmp3lame", outputFileName);
+                
+                console.log("Reading converted MP3 file...");
+                const mp3Data = ffmpeg.FS("readFile", outputFileName);
+
+                console.log("MP3 conversion complete.");
+                return new Blob([mp3Data.buffer], { type: "audio/mp3" });
+            } catch (error) {
+                console.error("Error during MP3 conversion:", error);
+                alert("MP3 conversion failed.");
+                return null;
+            }
+        }
+
+        // ✅ Upload the MP3 file
+        async function uploadAudio(blob) {
+            if (!blob) {
+                alert("No valid audio file to upload.");
+                return;
+            }
+
+            const formData = new FormData();
+            const file = new File([blob], "recording.mp3", { type: "audio/mp3" });
+            formData.append("file", file);
+
+            try {
+                document.getElementById("status").innerText = "Uploading...";
+
+                const response = await fetch(`${NGROK_URL}/upload`, {
+                    method: "POST",
+                    body: formData
+                });
+
+                const result = await response.json();
+                document.getElementById("status").innerText = "Upload Success: " + result.message;
+
+                console.log("File uploaded successfully.");
+            } catch (error) {
+                console.error("Upload failed:", error);
+                document.getElementById("status").innerText = "Upload Failed!";
+            }
+        }
+
+        // ✅ Fetch the ngrok URL on page load
+        fetchNgrokUrl();
+    </script>
+</body>
+</html>
