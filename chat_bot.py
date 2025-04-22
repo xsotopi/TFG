@@ -1,5 +1,6 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
+import time
 
 model_name = "Qwen/Qwen2.5-3B-Instruct"
 
@@ -21,7 +22,7 @@ text = tokenizer.apply_chat_template(
     add_generation_prompt=True
 )
 model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
-
+start = time.time()
 generated_ids = model.generate(
     **model_inputs,
     max_new_tokens=128,
@@ -29,6 +30,8 @@ generated_ids = model.generate(
     do_sample=True,
     top_p=0.9
 )
+end = time.time()
+print("QWEN timing:", end - start)
 generated_ids = [
     output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
 ]
