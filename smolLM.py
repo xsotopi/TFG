@@ -9,28 +9,25 @@ checkpoint = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
 
 def extract_intent_and_object(command):
     prompt = (
-        f"You are an AI assistant that receives a natural language transcription of a voice command. Your task is to analyze the command and extract all the actions and their corresponding objects in the order they appear."
+            f"You are an AI assistant that receives a natural language transcription of a voice command. Your task is to analyze the command and extract all the actions and their corresponding objects in the order they appear."
 
-        f"There are only three possible actions: 'pick', 'place', and 'move'."
+            f"There are only three possible actions: 'pick', 'place'."
 
-        f"Return the result as a JSON-like dictionary with the following structure:"
-        f"{{"
-        f"'pick': [list of objects in the order to pick them],"
-        f"'place': [list of objects in the order to place them],"
-        f"'move': [list of movements with the destination]"
-        f"}}"
+            f"Return the result as a JSON-like dictionary with the following structure:"
+            f"{{"
+            f"'pick': [list of objects in the order to pick them],"
+            f"'place': [list of locations to where place the objects],"
+            f"}}"
 
-        f"The movement pick, should only be referencing objects, not places, so things like apple, book, glass... tangible things"
-        f"The movement place, should only be referencing objects, not places, so things like apple, book, glass... tangible things"
-        f"The movement move, should only be referencing places, such as 'table', 'sink' or 'fridge', having in mind the location. So if we are theoretically already in that place, it should not be repeated"
-        f"So if picking from talbe and moving to fridge, we should move to table, pick, move to fridge, place"
+            f"The movement pick, should only be referencing objects, not places, so things like apple, book, glass... tangible things"
+            f"The movement place, should only be referencing objects, not places, so things like apple, book, glass... tangible things"
 
-        f"Provide only the the dictionary with the extracted actions and objects. Do not include any additional text or explanations."
-        f"If there are no actions or objects in the command, return an empty dictionary."
-        f"Here is the command:"
-        f"Command: \"{command}\"\n"
-        f"Answer:"
-    )
+            f"Provide only the the dictionary with the extracted actions and objects. Do not include any additional text or explanations."
+            f"If there are no actions or objects in the command, return an empty dictionary."
+            f"Here is the command:"
+            f"Command: \"{command}\"\n"
+            f"Answer:"
+        )
     messages = [{"role": "user", "content": prompt}]
     input_text=tokenizer.apply_chat_template(messages, tokenize=False)
     inputs = tokenizer.encode(input_text, return_tensors="pt").to(device)

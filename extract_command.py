@@ -3,11 +3,10 @@ from sentence_transformers import SentenceTransformer, util
 
 intents = {
     "pick": ["Pick up the apple", "Grab the apple", "I want the apple", "Take the apple"],
-    "reject": ["I don't want the apple", "Leave the apple", "Don't pick the apple"],
-    "move": ["Move to the right", "Go left", "Turn around", "Move forward"]
+    "reject": ["I don't want the apple", "Leave the apple", "Don't pick the apple"]
 }
 
-candidate_objects = ["apple", "cup", "towel", "banana", "table", "chair"]
+candidate_objects = ["apple", "cup", "towel", "banana", "table", "chair", "backpack"]
 
 
 def classify_intent(nlp_model, command):

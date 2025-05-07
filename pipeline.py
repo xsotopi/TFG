@@ -6,8 +6,9 @@ from sentence_transformers import SentenceTransformer, util
 from audio2text import transcribe_audio
 from extract_command import classify_intent, extract_object
 from detect import detect_target_objects
-from send2robot import compute_pose, send_pose_to_robot
+from send2robot import compute_pose, move_robot, server_send_pose
 
+import math
 # -------------------------
 # Load models
 # -------------------------
@@ -29,8 +30,8 @@ print("YOLO model loaded successfully!")
 def main():
     print("Starting main")
     # Define input paths (update these paths as needed)
-    audio_path = r'C:\Users\xavim\Desktop\TFG\code\uploads\recording.mp3'  # Path to your audio file (e.g., a recording of "Pick up the apple")
-    image_path = "fruta.jpg"   # Path to your image file (containing the objects)
+    audio_path = "/home/lab/Desktop/TFG/uploads/recording.mp3"
+
 
     # 1. Transcribe and translate the audio to English
     print("Transcribing audio...")
@@ -56,8 +57,9 @@ def main():
                 print(f"- {obj['class']} at {obj['bbox']} with {obj['confidence']*100:.2f}% confidence")
                 # Send the first detected object's bounding box center to the robot
             pose = compute_pose(detections[0]["bbox"])
-            send_pose_to_robot(pose)
+            pose = [-0.1442, -0.5769, 0.4349, math.radians(29.31), math.radians(-18.39), math.radians(0)]
 
+            server_send_pose(pose)
             print("Pose sent to the robot!!")
         else:
             print(f"No '{target_object}' found above {0.5*100:.0f}% confidence!")

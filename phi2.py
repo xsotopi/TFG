@@ -7,12 +7,12 @@ def extract_intent_and_object(command):
     prompt = (
         f"You are an AI assistant that receives a natural language transcription of a voice command. Your task is to analyze the command and extract all the actions and their corresponding objects in the order they appear."
 
-        f"There are only three possible actions: 'pick', 'place', and 'move'."
+        f"There are only three possible actions: 'pick', 'place'."
 
         f"Return the result as a JSON-like dictionary with the following structure:"
         f"{{"
         f"'pick': [list of objects in the order to pick them],"
-        f"'place': [list of objects in the order to place them],"
+        f"'place': [list of locations to where place the objects],"
         f"}}"
 
         f"The movement pick, should only be referencing objects, not places, so things like apple, book, glass... tangible things"
@@ -43,8 +43,9 @@ def extract_intent_and_object(command):
 
     return response_dict
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-model = AutoModelForCausalLM.from_pretrained("microsoft/phi-2", device_map="cpu", torch_dtype=torch.float32)
+model = AutoModelForCausalLM.from_pretrained("microsoft/phi-2", device_map=device, torch_dtype=torch.float32)
 
 tokenizer = AutoTokenizer.from_pretrained("microsoft/phi-2", trust_remote_code=True)
 
