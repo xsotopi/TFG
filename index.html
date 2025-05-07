@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Recorder</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f4f4f4;
+            color: #333;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        h2 {
+            color: #007bff;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 12px 24px;
+            margin: 10px;
+            border: none;
+            border-radius: 8px;
+            background-color: #007bff;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        audio {
+            width: 90%;
+            max-width: 400px;
+            margin-top: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        p#status {
+            margin-top: 20px;
+            font-size: 16px;
+            color: #555;
+            text-align: center;
+        }
+
+        /* Responsive adjustments for smaller screens */
+        @media (max-width: 600px) {
+            h2 {
+                font-size: 24px;
+                margin-bottom: 15px;
+            }
+            button {
+                padding: 10px 20px;
+                font-size: 14px;
+                margin: 8px;
+            }
+            audio {
+                width: 100%;
+            }
+            p#status {
+                font-size: 14px;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.4/dist/ffmpeg.min.js"></script>
+</head>
+<body>
+    <h2>Voice Recorder</h2>
+    <div style="display: flex; flex-wrap: wrap; justify-content: center;">
+        <button id="recordBtn">Record</button>
+        <button id="stopBtn" disabled>Stop</button>
+        <button id="uploadBtn" disabled>Upload</button>
+    </div>
+    <audio id="audioPlayback" controls></audio>
+    <p id="status"></p>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let ffmpegInstance;
+        let NGROK_URL = "";
+
+        async function fetchNgrokUrl() {
+            try {
+                const response = await fetch("/get_ngrok_url");
+                const data = await response.json();
+                NGROK_URL = data.url;
+                console.log("Using ngrok URL:", NGROK_URL);
+            } catch (error) {
+                console.error("Error fetching ngrok URL:", error);
+            }
+        }
+
+        async function loadFFmpeg() {
+            const { createFFmpeg, fetchFile } = FFmpeg;
+            const ffmpeg = createFFmpeg({ log: true });
+            await ffmpeg.load();
+            return { ffmpeg, fetchFile };
+        }
+
+        document.getElementById("recordBtn").addEventListener("click", async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioChunks = [];
+                mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    document.getElementById("audioPlayback").src = audioUrl;
+
+                    console.log("Recording stopped, converting to MP3...");
+                    const mp3Blob = await convertWebMtoMP3(audioBlob);
+
+                    document.getElementById("uploadBtn").disabled = false;
+                    document.getElementById("uploadBtn").onclick = () => uploadAudio(mp3Blob);
+
+                    console.log("MP3 file ready, upload button enabled.");
+                };
+
+                mediaRecorder.start();
+                document.getElementById("recordBtn").disabled = true;
+                document.getElementById("stopBtn").disabled = false;
+            } catch (error) {
+                console.error("Error accessing microphone:", error);
+                alert("Microphone access denied. Please allow microphone access and reload.");
+            }
+        });
+
+        document.getElementById("stopBtn").addEventListener("click", () => {
+            if (mediaRecorder) {
+                mediaRecorder.stop();
+                document.getElementById("recordBtn").disabled = false;
+                document.getElementById("stopBtn").disabled = true;
+            }
+        });
+
+        async function convertWebMtoMP3(webmBlob) {
+            if (!ffmpegInstance) {
+                ffmpegInstance = await loadFFmpeg();
+            }
+
+            const { ffmpeg, fetchFile } = ffmpegInstance;
+            const inputFileName = "input.webm";
+            const outputFileName = "output.mp3";
+
+            try {
+                console.log("Writing WebM file to FFmpeg...");
+                ffmpeg.FS("writeFile", inputFileName, await fetchFile(webmBlob));
+
+                console.log("Running FFmpeg conversion...");
+                await ffmpeg.run("-i", inputFileName, "-q:a", "5", "-acodec", "libmp3lame", outputFileName);
+
+                console.log("Reading converted MP3 file...");
+                const mp3Data = ffmpeg.FS("readFile", outputFileName);
+
+                console.log("MP3 conversion complete.");
+                return new Blob([mp3Data.buffer], { type: "audio/mp3" });
+            } catch (error) {
+                console.error("Error during MP3 conversion:", error);
+                alert("MP3 conversion failed.");
+                return null;
+            }
+        }
+
+        async function uploadAudio(blob) {
+            if (!blob) {
+                alert("No valid audio file to upload.");
+                return;
+            }
+
+            const formData = new FormData();
+            const file = new File([blob], "recording.mp3", { type: "audio/mp3" });
+            formData.append("file", file);
+
+            try {
+                document.getElementById("status").innerText = "Uploading...";
+
+                const response = await fetch(`${NGROK_URL}/upload`, {
+                    method: "POST",
+                    body: formData
+                });
+
+                const result = await response.json();
+                document.getElementById("status").innerText = "Upload Success: " + result.message;
+
+                console.log("File uploaded successfully.");
+            } catch (error) {
+                console.error("Upload failed:", error);
+                document.getElementById("status").innerText = "Upload Failed!";
+            }
+        }
+
+        fetchNgrokUrl();
+    </script>
+</body>
+</html>
