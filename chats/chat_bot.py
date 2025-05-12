@@ -16,8 +16,12 @@ def extract_intent_and_object(command, model, tokenizer, device):
             f"'place': [list of locations to where place the objects],"
             f"}}"
 
-            f"The movement pick, should only be referencing objects, not places, so things like apple, book, glass... tangible things"
-            f"The movement place, should only be referencing objects, not places, so things like apple, book, glass... tangible things"
+            f"The movement pick, should only be referencing objects, not places, so things like apple, book, glass... tangible things. And should have a reference to each of them, if plural, we should have each of them individually as objects."
+            f"Example: if we have 2 apples, in pick we should have [apple, apple]. If we have 3 books, in pick we should have [book, book, book]."
+            f"The movement place, should only be referencing places, not objects, so things like table, fridge, box1... locations. If we have same place for several objects still return the place for each one of the objects."
+            f"Example: if we have an apple and a banana and want to place both in the table, we should have [table, table]."
+
+            f"For both cases, if multiple objects treat them as individual, so... if 2 apples, in pick we should have [apple, apple]. If leave it in the table 2 times we should have [table, table]"
 
             f"Provide only the the dictionary with the extracted actions and objects. Do not include any additional text or explanations."
             f"If there are no actions or objects in the command, return an empty dictionary."
@@ -26,9 +30,9 @@ def extract_intent_and_object(command, model, tokenizer, device):
             f"Answer:"
         )
     messages = [{"role": "user", "content": prompt}]
-    input_text=tokenizer.apply_chat_template(messages, tokenize=False)
+    input_text=tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, enable_thinking=False)
     inputs = tokenizer.encode(input_text, return_tensors="pt").to(device)
-    outputs = model.generate(inputs, max_new_tokens=50, temperature=0.2, top_p=0.9, do_sample=True)
+    outputs = model.generate(inputs, max_new_tokens=50)
     response = tokenizer.decode(outputs[0])
 
     dict_matches = re.findall(r"\{[^{}]+\}", response)

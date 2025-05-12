@@ -23,18 +23,22 @@ import torch
 try:
     whisper_model = whisper.load_model("small")
     print("Whisper model loaded successfully!")
-    nlp_model = SentenceTransformer("sentence-transformers/paraphrase-MiniLM-L3-v2")
-    print("Sentence Transformer model loaded successfully!")
+    # nlp_model = SentenceTransformer("sentence-transformers/paraphrase-MiniLM-L3-v2")
+    # print("Sentence Transformer model loaded successfully!")
     yolo_model = YOLO("yolov8n.pt")
     print("YOLO model loaded successfully!")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     checkpoint = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
+    # checkpoint = "Qwen/Qwen3-0.6B" # For Qwen model
     slm_tokenizer = AutoTokenizer.from_pretrained(checkpoint)
     # for multiple GPUs install accelerate and do `model = AutoModelForCausalLM.from_pretrained(checkpoint, device_map="auto")`
     slm_model = AutoModelForCausalLM.from_pretrained(checkpoint).to(device)
     # slm_model = AutoModelForCausalLM.from_pretrained("microsoft/phi-2", device_map=device, torch_dtype=torch.float32)
     # slm_tokenizer = AutoTokenizer.from_pretrained("microsoft/phi-2", trust_remote_code=True)
+    
+    
+    
     print("SLM model loaded successfully!")
 except Exception as e:
     print(f"Error loading models: {e}")
@@ -42,7 +46,7 @@ except Exception as e:
 
 COLOR_CAMERA_INDEX = 6
 DEPTH_CAMERA_INDEX = 0
-UPLOAD_FOLDER = "uploads/"
+UPLOAD_FOLDER = "app/uploads/"
 AUDIO_FILE_EXTENSION = ".mp3"
 
 # Global flags and variables
@@ -88,9 +92,11 @@ def process_audio(audio_path):
     global show_detections
     global latest_audio_file
 
-    print(f"Processing audio file: {audio_path}")
+    language_code = os.path.splitext(os.path.basename(audio_path))[0]
+
+    print(f"Processing audio file: {audio_path} with language code: {language_code}")
     try:
-        transcript = transcribe_audio(whisper_model, audio_path)
+        transcript = transcribe_audio(whisper_model, audio_path, language_code)
         print("Transcript:", transcript)
         actions = extract_intent_and_object(transcript, slm_model, slm_tokenizer, device)
         print("Extracted Actions:", actions)

@@ -1,219 +1,270 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voice Recorder</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            background-color: #f4f4f4;
-            color: #333;
-            padding: 20px;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Voice Recorder</title>
 
-        h2 {
-            color: #007bff;
-            margin-bottom: 20px;
-        }
+  <style>
+    body {
+      font-family: sans-serif;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; min-height:100vh; margin:0;
+      background-color:#f4f4f4; color:#333; padding:20px;
+      box-sizing:border-box;
+    }
+    h2 { color:#007bff; margin-bottom:20px; }
 
-        button {
-            padding: 12px 24px;
-            margin: 10px;
-            border: none;
-            border-radius: 8px;
-            background-color: #007bff;
-            color: white;
-            font-size: 16px;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
+    /* match buttons & input */
+    button, #languageInput {
+      padding:12px 24px; margin:10px; border:none;
+      border-radius:8px; font-size:16px;
+      box-shadow:0 2px 4px rgba(0,0,0,.1);
+      transition: background-color .3s ease;
+    }
+    button {
+      background-color:#007bff; color:#fff; cursor:pointer;
+    }
+    button:hover { background-color:#0056b3; }
+    button:disabled { background-color:#ccc; cursor:not-allowed; }
 
-        button:hover {
-            background-color: #0056b3;
-        }
+    /* input for language */
+    #languageInput {
+      background:#fff; border:1px solid #ccc; width:220px;
+    }
 
-        button:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
+    /* the custom dropdown */
+    #languageDropdown {
+      position:absolute;
+      top:100%; left:0; right:0;
+      background:#fff; border:1px solid #ccc;
+      max-height:200px; overflow-y:auto;
+      border-radius:4px; box-shadow:0 2px 4px rgba(0,0,0,.1);
+      z-index:100;
+    }
+    #languageDropdown .item {
+      padding:8px 12px; cursor:pointer;
+    }
+    #languageDropdown .item:hover {
+      background-color:#f0f0f0;
+    }
+    .hidden { display:none; }
 
-        audio {
-            width: 90%;
-            max-width: 400px;
-            margin-top: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
+    audio {
+      width:90%; max-width:400px; margin-top:20px;
+      border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,.1);
+    }
+    p#status {
+      margin-top:20px; font-size:16px; color:#555;
+      text-align:center;
+    }
 
-        p#status {
-            margin-top: 20px;
-            font-size: 16px;
-            color: #555;
-            text-align: center;
-        }
+    @media (max-width:600px) {
+      h2 { font-size:24px; margin-bottom:15px; }
+      button, #languageInput { padding:10px 20px; font-size:14px; margin:8px; }
+      audio { width:100%; }
+      p#status { font-size:14px; }
+    }
 
-        /* Responsive adjustments for smaller screens */
-        @media (max-width: 600px) {
-            h2 {
-                font-size: 24px;
-                margin-bottom: 15px;
-            }
-            button {
-                padding: 10px 20px;
-                font-size: 14px;
-                margin: 8px;
-            }
-            audio {
-                width: 100%;
-            }
-            p#status {
-                font-size: 14px;
-            }
-        }
-    </style>
-    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.4/dist/ffmpeg.min.js"></script>
+    .picker-wrapper {
+      position:relative;
+      display:inline-block;
+    }
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.4/dist/ffmpeg.min.js"></script>
 </head>
 <body>
-    <h2>Voice Recorder</h2>
-    <div style="display: flex; flex-wrap: wrap; justify-content: center;">
-        <button id="recordBtn">Record</button>
-        <button id="stopBtn" disabled>Stop</button>
-        <button id="uploadBtn" disabled>Upload</button>
-    </div>
-    <audio id="audioPlayback" controls></audio>
-    <p id="status"></p>
+  <h2>Voice Recorder</h2>
 
-    <script>
-        let mediaRecorder;
-        let audioChunks = [];
-        let ffmpegInstance;
-        let NGROK_URL = "";
+  <div class="picker-wrapper">
+    <input id="languageInput"
+           placeholder="Select language…"
+           title="Language of speech"
+           autocomplete="off"
+    />
+    <div id="languageDropdown" class="hidden"></div>
+  </div>
 
-        async function fetchNgrokUrl() {
-            try {
-                const response = await fetch("/get_ngrok_url");
-                const data = await response.json();
-                NGROK_URL = data.url;
-                console.log("Using ngrok URL:", NGROK_URL);
-            } catch (error) {
-                console.error("Error fetching ngrok URL:", error);
-            }
+  <div style="display:flex; flex-wrap:wrap; justify-content:center;">
+    <button id="recordBtn">Record</button>
+    <button id="stopBtn" disabled>Stop</button>
+    <button id="uploadBtn" disabled>Upload</button>
+  </div>
+
+  <audio id="audioPlayback" controls></audio>
+  <p id="status"></p>
+
+  <script>
+    // 1) Full ISO→English map
+    const whisperLanguages = {
+      af:"Afrikaans", am:"Amharic", ar:"Arabic", as:"Assamese", az:"Azerbaijani",
+      ba:"Bashkir", be:"Belarusian", bg:"Bulgarian", bn:"Bengali", bo:"Tibetan",
+      br:"Breton", bs:"Bosnian", ca:"Catalan", cs:"Czech", cy:"Welsh", da:"Danish",
+      de:"German", el:"Greek", en:"English", es:"Spanish", et:"Estonian", eu:"Basque",
+      fa:"Persian", fi:"Finnish", fr:"French", gl:"Galician", gu:"Gujarati",
+      ha:"Hausa", haw:"Hawaiian", he:"Hebrew", hi:"Hindi", hr:"Croatian",
+      ht:"Haitian Creole", hu:"Hungarian", hy:"Armenian", id:"Indonesian",
+      is:"Icelandic", it:"Italian", ja:"Japanese", jw:"Javanese", ka:"Georgian",
+      kk:"Kazakh", km:"Khmer", kn:"Kannada", ko:"Korean", la:"Latin",
+      lb:"Luxembourgish", ln:"Lingala", lo:"Lao", lt:"Lithuanian",
+      lv:"Latvian", mg:"Malagasy", mi:"Maori", mk:"Macedonian",
+      ml:"Malayalam", mn:"Mongolian", mr:"Marathi", ms:"Malay",
+      mt:"Maltese", my:"Burmese", ne:"Nepali", nl:"Dutch", no:"Norwegian",
+      oc:"Occitan", pa:"Punjabi", pl:"Polish", ps:"Pashto", pt:"Portuguese",
+      ro:"Romanian", ru:"Russian", sa:"Sanskrit", sd:"Sindhi", si:"Sinhala",
+      sk:"Slovak", sl:"Slovenian", sn:"Shona", so:"Somali", sq:"Albanian",
+      sr:"Serbian", su:"Sundanese", sv:"Swedish", sw:"Swahili", ta:"Tamil",
+      te:"Telugu", tg:"Tajik", th:"Thai", tk:"Turkmen", tl:"Tagalog",
+      tr:"Turkish", tt:"Tatar", uk:"Ukrainian", ur:"Urdu", uz:"Uzbek",
+      vi:"Vietnamese", yi:"Yiddish", yo:"Yoruba", zh:"Chinese"
+    };
+
+    // 2) Native‐name overrides for common ones
+    const nativeNames = {
+      es:"Español", de:"Deutsch", fr:"Français", zh:"中文", ja:"日本語",
+      ru:"Русский", ar:"العربية", pt:"Português", hi:"हिन्दी", ko:"한국어",
+      el:"Ελληνικά", it:"Italiano", ca:"Català", nl:"Nederlands", sv:"Svenska",
+      da:"Dansk", fi:"Suomi", no:"Norsk", pl:"Polski", cs:"Čeština",
+      sk:"Slovenčina", sl:"Slovenščina", hr:"Hrvatski", uk:"Українська",
+      tr:"Türkçe", vi:"Tiếng Việt", id:"Bahasa Indonesia", ms:"Melayu",
+      ro:"Română", hu:"Magyar", hy:"Հայերեն", bg:"Български", fa:"فارسی",
+      he:"עברית", th:"ไทย", bn:"বাংলা", mr:"मराठी", ta:"தமிழ்",
+      te:"తెలుగు", gu:"ગુજરાતી", kn:"ಕನ್ನಡ", ml:"മലയാളം", pa:"ਪੰਜਾਬੀ", ur:"اردو"
+    };
+
+    // 3) Build languages array
+    const languages = Object.entries(whisperLanguages).map(([code, eng]) => ({
+      code,
+      eng,
+      native: nativeNames[code] || eng
+    }));
+
+    // 4) Build reverse map for lookup
+    const reverseMap = {};
+    languages.forEach(({code, eng, native}) => {
+      reverseMap[eng.toLowerCase()]    = code;
+      reverseMap[native.toLowerCase()] = code;
+      reverseMap[code.toLowerCase()]   = code;
+    });
+
+    const input    = document.getElementById("languageInput");
+    const dropdown = document.getElementById("languageDropdown");
+
+    // 5) Filter & render **all** matching items (no 12-item cap)
+    function filterDropdown() {
+      const q = input.value.trim().toLowerCase();
+      dropdown.innerHTML = "";
+      for (let {code, eng, native} of languages) {
+        if (
+          !q ||
+          eng.toLowerCase().includes(q) ||
+          native.toLowerCase().includes(q) ||
+          code === q
+        ) {
+          const div = document.createElement("div");
+          div.className = "item";
+          div.textContent = (native === eng) ? eng : `${eng} (${native})`;
+          div.onclick = () => {
+            input.value = eng;
+            dropdown.classList.add("hidden");
+          };
+          dropdown.appendChild(div);
         }
+      }
+      dropdown.classList.toggle("hidden", dropdown.children.length === 0);
+    }
 
-        async function loadFFmpeg() {
-            const { createFFmpeg, fetchFile } = FFmpeg;
-            const ffmpeg = createFFmpeg({ log: true });
-            await ffmpeg.load();
-            return { ffmpeg, fetchFile };
-        }
+    input.addEventListener("input", filterDropdown);
+    input.addEventListener("focus", filterDropdown);
+    input.addEventListener("blur", () =>
+      setTimeout(() => dropdown.classList.add("hidden"), 200)
+    );
 
-        document.getElementById("recordBtn").addEventListener("click", async () => {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                audioChunks = [];
-                mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+    // ─── 6) Your unchanged recording & upload logic ────────────────
+    let mediaRecorder, audioChunks = [], ffmpegInstance, NGROK_URL = "";
 
-                mediaRecorder.ondataavailable = event => {
-                    audioChunks.push(event.data);
-                };
+    async function fetchNgrokUrl() {
+      try {
+        const r = await fetch("/get_ngrok_url");
+        NGROK_URL = (await r.json()).url;
+      } catch (e) { console.error("Error fetching ngrok URL:", e); }
+    }
 
-                mediaRecorder.onstop = async () => {
-                    const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-                    const audioUrl = URL.createObjectURL(audioBlob);
-                    document.getElementById("audioPlayback").src = audioUrl;
+    async function loadFFmpeg() {
+      const { createFFmpeg, fetchFile } = FFmpeg;
+      const ffmpeg = createFFmpeg({ log: true });
+      await ffmpeg.load();
+      return { ffmpeg, fetchFile };
+    }
 
-                    console.log("Recording stopped, converting to MP3...");
-                    const mp3Blob = await convertWebMtoMP3(audioBlob);
+    async function convertWebMtoMP3(webmBlob) {
+      if (!ffmpegInstance) ffmpegInstance = await loadFFmpeg();
+      const { ffmpeg, fetchFile } = ffmpegInstance;
+      ffmpeg.FS("writeFile", "input.webm", await fetchFile(webmBlob));
+      await ffmpeg.run(
+        "-i", "input.webm",
+        "-q:a", "5",
+        "-acodec", "libmp3lame",
+        "output.mp3"
+      );
+      const data = ffmpeg.FS("readFile", "output.mp3");
+      return new Blob([data.buffer], { type: "audio/mp3" });
+    }
 
-                    document.getElementById("uploadBtn").disabled = false;
-                    document.getElementById("uploadBtn").onclick = () => uploadAudio(mp3Blob);
+    document.getElementById("recordBtn").addEventListener("click", async () => {
+      const engName = input.value;
+      const lang    = reverseMap[engName.toLowerCase()];
+      if (!lang) {
+        alert("Please select a valid language.");
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunks = [];
+        mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstop = async () => {
+          const blob = new Blob(audioChunks, { type: "audio/webm" });
+          document.getElementById("audioPlayback").src = URL.createObjectURL(blob);
+          const mp3Blob = await convertWebMtoMP3(blob);
+          document.getElementById("uploadBtn").disabled = false;
+          document.getElementById("uploadBtn").onclick = () => uploadAudio(mp3Blob, lang);
+        };
+        mediaRecorder.start();
+        recordBtn.disabled = true;
+        stopBtn.disabled   = false;
+      } catch (e) {
+        console.error("Mic access error:", e);
+        alert("Microphone access denied.");
+      }
+    });
 
-                    console.log("MP3 file ready, upload button enabled.");
-                };
+    document.getElementById("stopBtn").addEventListener("click", () => {
+      if (mediaRecorder) {
+        mediaRecorder.stop();
+        recordBtn.disabled = false;
+        stopBtn.disabled   = true;
+      }
+    });
 
-                mediaRecorder.start();
-                document.getElementById("recordBtn").disabled = true;
-                document.getElementById("stopBtn").disabled = false;
-            } catch (error) {
-                console.error("Error accessing microphone:", error);
-                alert("Microphone access denied. Please allow microphone access and reload.");
-            }
-        });
+    async function uploadAudio(blob, lang) {
+      if (!blob) { alert("No audio."); return; }
+      const form = new FormData();
+      form.append("file", new File([blob], `${lang}.mp3`, { type: "audio/mp3" }));
+      try {
+        document.getElementById("status").innerText = "Uploading…";
+        const res = await fetch(`${NGROK_URL}/upload`, { method: "POST", body: form });
+        const j   = await res.json();
+        document.getElementById("status").innerText = "Upload Success: " + j.message;
+      } catch (e) {
+        console.error("Upload failed:", e);
+        document.getElementById("status").innerText = "Upload Failed!";
+      }
+    }
 
-        document.getElementById("stopBtn").addEventListener("click", () => {
-            if (mediaRecorder) {
-                mediaRecorder.stop();
-                document.getElementById("recordBtn").disabled = false;
-                document.getElementById("stopBtn").disabled = true;
-            }
-        });
-
-        async function convertWebMtoMP3(webmBlob) {
-            if (!ffmpegInstance) {
-                ffmpegInstance = await loadFFmpeg();
-            }
-
-            const { ffmpeg, fetchFile } = ffmpegInstance;
-            const inputFileName = "input.webm";
-            const outputFileName = "output.mp3";
-
-            try {
-                console.log("Writing WebM file to FFmpeg...");
-                ffmpeg.FS("writeFile", inputFileName, await fetchFile(webmBlob));
-
-                console.log("Running FFmpeg conversion...");
-                await ffmpeg.run("-i", inputFileName, "-q:a", "5", "-acodec", "libmp3lame", outputFileName);
-
-                console.log("Reading converted MP3 file...");
-                const mp3Data = ffmpeg.FS("readFile", outputFileName);
-
-                console.log("MP3 conversion complete.");
-                return new Blob([mp3Data.buffer], { type: "audio/mp3" });
-            } catch (error) {
-                console.error("Error during MP3 conversion:", error);
-                alert("MP3 conversion failed.");
-                return null;
-            }
-        }
-
-        async function uploadAudio(blob) {
-            if (!blob) {
-                alert("No valid audio file to upload.");
-                return;
-            }
-
-            const formData = new FormData();
-            const file = new File([blob], "recording.mp3", { type: "audio/mp3" });
-            formData.append("file", file);
-
-            try {
-                document.getElementById("status").innerText = "Uploading...";
-
-                const response = await fetch(`${NGROK_URL}/upload`, {
-                    method: "POST",
-                    body: formData
-                });
-
-                const result = await response.json();
-                document.getElementById("status").innerText = "Upload Success: " + result.message;
-
-                console.log("File uploaded successfully.");
-            } catch (error) {
-                console.error("Upload failed:", error);
-                document.getElementById("status").innerText = "Upload Failed!";
-            }
-        }
-
-        fetchNgrokUrl();
-    </script>
+    // ─── 7) Init ───────────────────────────────────────────────────
+    fetchNgrokUrl();
+  </script>
 </body>
 </html>
