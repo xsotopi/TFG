@@ -4,12 +4,12 @@ from ultralytics import YOLO
 from sentence_transformers import SentenceTransformer
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from audio2text import transcribe_audio
-from extract_command import classify_intent, extract_object
-from detect import detect_target_objects_realtime
+from ai.audio2text import transcribe_audio
+from ai.extract_command import classify_intent, extract_object
+from ai.detect import detect_target_objects_realtime
 from send2robot import compute_pose, server_send_pose
-from cameras import capture_color_frame, capture_depth_frame
-from chat_bot import extract_intent_and_object
+from camera.cameras import capture_color_frame, capture_depth_frame
+from chats.chat_bot import extract_intent_and_object
 
 import math
 import time
@@ -177,9 +177,10 @@ def main():
 
         display_frame = color_frame.copy()
         depth_frame = capture_depth_frame(device_path=f"/dev/video{DEPTH_CAMERA_INDEX}")
+
         depth_vis_color = None
         if depth_frame is not None:
-            depth_vis = cv2.convertScaleAbs(depth_frame, alpha=0.03)
+            depth_vis = cv2.convertScaleAbs(depth_frame, alpha= 0.05)
             depth_vis_color = cv2.applyColorMap(depth_vis, cv2.COLORMAP_JET)
 
         if current_intent == "pick" and current_target_object and show_detections:

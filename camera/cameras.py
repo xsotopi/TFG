@@ -54,7 +54,7 @@ if __name__ == "__main__":
 
     depth_frame = capture_depth_frame()
     if depth_frame is not None:
-        frame_vis = cv2.convertScaleAbs(depth_frame, alpha=0.03)
+        frame_vis = cv2.convertScaleAbs(depth_frame, alpha=0.05)
         cv2.imshow("Depth Camera Test", frame_vis)
     else:
         print("Could not capture depth frame for test.")

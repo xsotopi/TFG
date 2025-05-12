@@ -29,7 +29,7 @@ while True:
     frame = np.frombuffer(raw_frame, dtype=np.uint16).reshape((height, width))
 
     # Normaliza para visualizar (conversión a 8-bit)
-    frame_vis = cv2.convertScaleAbs(frame, alpha=0.03)  # Ajusta alpha según profundidad
+    frame_vis = cv2.convertScaleAbs(frame, alpha=0.05)  # Ajusta alpha según profundidad
 
     cv2.imshow("Camera 0", frame_vis)
     if cv2.waitKey(1) & 0xFF == ord('q'):
