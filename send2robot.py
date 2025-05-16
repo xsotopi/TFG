@@ -44,81 +44,63 @@ def move_robot(pose, robot_ip="192.168.0.102", speed=0.25, accel=1.2):
 
 
 
-def compute_pose(bbox, depth_frame, color_frame_shape):
-    """
-    Computes the pose (x_center_color, y_center_color, z_depth_meters, rx, ry, rz)
-    of the detected object using bounding box and depth frame.
-    Assumes the depth frame values are in millimeters.
+def compute_pose(bbox, depth_frame, color_shape, K, dist, T_tcp_cam):
+    x1, y1, x2, y2 = bbox
+    h_c, w_c = color_shape[:2]
+    u, v = (x1 + x2) / 2, (y1 + y2) / 2     # píxel en color
 
-    Args:
-        bbox (list): Bounding box coordinates [x1, y1, x2, y2] in the color image.
-        depth_frame (numpy.ndarray): The depth frame (numpy array, values in mm).
-        color_frame_shape (tuple): The shape of the color frame (height, width).
-
-    Returns:
-        list: Pose [x_center_color, y_center_color, z_depth_meters, rx, ry, rz] or None on error.
-              Rotations (rx, ry, rz) are placeholders (0,0,0).
-    """
-    try:
-        x1, y1, x2, y2 = bbox
-        color_height, color_width = color_frame_shape
-
-        # Calculate the center coordinates of the bounding box in the color image
-        x_center_color = (x1 + x2) / 2
-        y_center_color = (y1 + y2) / 2
-
-        # Get the depth value from the depth frame at the center coordinates.
-        # Ensure the coordinates are within the depth frame bounds.
-        # This requires that the depth frame is registered/aligned with the color frame.
-        # If they are not aligned, or have different FoV/resolutions without calibration,
-        # this mapping will be inaccurate.
-        depth_height, depth_width = depth_frame.shape
-
-        # Simple scaling if resolutions differ. For accuracy, use camera intrinsics for projection.
-        x_center_depth = int(x_center_color * (depth_width / color_width))
-        y_center_depth = int(y_center_color * (depth_height / color_height))
-
-        # Clamp coordinates to be within depth frame bounds
-        x_center_depth = max(0, min(x_center_depth, depth_width - 1))
-        y_center_depth = max(0, min(y_center_depth, depth_height - 1))
-
-        # Get depth value (e.g., in millimeters)
-        z_depth_mm = depth_frame[y_center_depth, x_center_depth]
-
-        if z_depth_mm == 0: # Often 0 means no valid depth data
-            # print(f"Warning: Depth value at ({y_center_depth}, {x_center_depth}) is 0. Invalid depth. Bbox center ({x_center_color},{y_center_color})")
-            # It might be better to average depth over a small patch around the center
-            # or use a more robust method if 0 is a common 'no return' value.
-            patch_size = 5 # pixels
-            y_start, y_end = max(0, y_center_depth - patch_size), min(depth_height, y_center_depth + patch_size + 1)
-            x_start, x_end = max(0, x_center_depth - patch_size), min(depth_width, x_center_depth + patch_size + 1)
-            depth_patch = depth_frame[y_start:y_end, x_start:x_end]
-            non_zero_depths = depth_patch[depth_patch > 0]
-            if non_zero_depths.size > 0:
-                z_depth_mm = np.mean(non_zero_depths)
-                # print(f"Using mean of non-zero patch: {z_depth_mm:.2f} mm")
-            else:
-                print(f"Warning: Still no valid depth in patch for bbox center ({x_center_color},{y_center_color}). Pose computation failed.")
-                return None
-
-
-        # Convert depth to meters
-        z_depth_meters = z_depth_mm / 1000.0
-
-        # Placeholder for rotations
-        rx, ry, rz = 0.0, 0.0, 0.0 # Placeholder for actual rotation calculation
-
-        # The X and Y returned here are pixel coordinates in the color image.
-        # If the robot needs world coordinates, further transformation using camera intrinsics is needed.
-        # For now, assuming (x_center_color, y_center_color) and z_depth_meters are what's expected.
-        return [x_center_color, y_center_color, z_depth_meters, rx, ry, rz]
-
-    except IndexError:
-        print(f"Error: Depth coordinates ({y_center_depth}, {x_center_depth}) likely out of bounds for depth_frame shape {depth_frame.shape}. Bbox: {bbox}, Color shape: {color_frame_shape}")
+    # ---- profundidad (media 5×5) ----
+    h_d, w_d = depth_frame.shape[:2]
+    uu = int(u * w_d / w_c)
+    vv = int(v * h_d / h_c)
+    patch = depth_frame[max(0, vv-2):min(h_d, vv+3),
+                        max(0, uu-2):min(w_d, uu+3)]
+    nz = patch[patch > 0]
+    if nz.size == 0:
         return None
-    except Exception as e:
-        print(f"Error computing pose: {e}")
-        return None
+    z = np.mean(nz) / 1000.0                 # mm → m
+
+    # ---- punto 3-D en coords CÁMARA (Realsense: x-derecha, y-abajo, z-adelante) ----
+    pts = cv2.undistortPoints(np.array([[[u, v]]], dtype=np.float64), K, dist)
+    xn, yn = pts.reshape(-1)
+    Xc, Yc, Zc = xn * z, yn * z, z          # cámara
+
+    # ---- remapeo de ejes a convención UR (x→adelante, y→izquierda, z→arriba) ----
+    # Camera  (Realsense):  X→derecha, Y→abajo, Z→adelante
+    # Queremos UR-base previa a la hand-eye: X_camUR→ Zc, Y_camUR→ -Xc, Z_camUR→ -Yc
+    Pc_camUR = np.array([Zc, -Xc, -Yc, 1.0])
+
+    # ---- cámara → TCP (usando la INVERTIDA) ----
+    Pc_tcp = T_tcp_cam @ Pc_camUR
+
+    # ---- TCP → base (pose actual vía puerto 30003) ----
+    T_base_tcp = get_tcp_pose_4x4()
+    Pw_base = T_base_tcp @ Pc_tcp
+
+    # orientación = orientación actual del TCP
+    rvec, _ = cv2.Rodrigues(T_base_tcp[:3, :3])
+    rx, ry, rz = rvec.ravel()
+
+    return [float(Pw_base[0]), float(Pw_base[1]), float(Pw_base[2]),
+            rx, ry, rz]
+
+import socket, struct, cv2
+def get_tcp_pose_4x4(ip="192.168.0.102", port=30003):
+    """Lee 1 paquete del stream primario (30003) y devuelve matriz 4×4 TCP→base."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(0.4)
+    s.connect((ip, port))
+    hdr = s.recv(4)
+    (pkt_len,) = struct.unpack(">I", hdr)
+    data = s.recv(pkt_len-4, socket.MSG_WAITALL)
+    s.close()
+
+    pose6 = struct.unpack(">6d", data[440:488])  # 444-4 = 440
+    x,y,z, rx,ry,rz = pose6
+    angle = (rx**2+ry**2+rz**2)**0.5
+    R = np.eye(3) if angle < 1e-6 else cv2.Rodrigues(np.array([rx,ry,rz]))[0]
+    T = np.eye(4); T[:3,:3], T[:3,3] = R, [x,y,z]
+    return T
 
 
 

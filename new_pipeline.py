@@ -16,6 +16,19 @@ import time
 import threading
 import os
 import torch
+import numpy as np
+
+CALIB_DIR = "camera"                       # carpeta donde están los .npy/.npz
+
+K_dist         = np.load(os.path.join(CALIB_DIR, "intrinsics.npz"))
+K              = K_dist["K"]               # matriz intrínseca 3×3
+dist           = K_dist["dist"]            # distorsiones
+T_cam2tcp      = np.load(os.path.join(CALIB_DIR, "T_cam2tcp.npy"))  # 4×4
+
+fx, fy = K[0,0], K[1,1]
+cx, cy = K[0,2], K[1,2]
+
+print("[INFO] Calibración cargada OK")
 
 # -------------------------
 # Load models
@@ -97,6 +110,7 @@ def process_audio(audio_path):
     print(f"Processing audio file: {audio_path} with language code: {language_code}")
     try:
         transcript = transcribe_audio(whisper_model, audio_path, language_code)
+        transcript = "pick the apple"
         print("Transcript:", transcript)
         actions = extract_intent_and_object(transcript, slm_model, slm_tokenizer, device)
         print("Extracted Actions:", actions)
@@ -207,8 +221,9 @@ def main():
                         depth_bbox = project_bbox_to_depth(depth_frame, color_frame.shape[:2], bbox)
                         cv2.rectangle(depth_vis_color, (depth_bbox[0], depth_bbox[1]), (depth_bbox[2], depth_bbox[3]), (0, 255, 0), 2)
 
+                    
                     if not pose_sent:
-                        pose = compute_pose(bbox, depth_frame, color_frame.shape[:2])
+                        pose = compute_pose(bbox, depth_frame, color_frame.shape[:2], K, dist, T_cam2tcp)
                         if pose:
                             print("Computed pose:", pose)
                             if robot_comm_thread is None or not robot_comm_thread.is_alive():
