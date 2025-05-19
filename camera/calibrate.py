@@ -4,7 +4,7 @@ import glob, os
 
 # ---------- CONFIGURACIÓN ----------
 CHECKERBOARD = (8, 7)          # 8 columnas internas × 7 filas internas
-SQUARE_SIZE  = 0.03           # 15 mm  (lo dejas así)
+SQUARE_SIZE  = 0.0127           # 15 mm  (lo dejas así)
 IMAGE_DIR    = "images"
 POSE_DIR     = "poses"
 SAVE_PATH    = "T_cam2tcp.npy"

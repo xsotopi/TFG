@@ -70,7 +70,7 @@ def process_audio(path):
 
     current_intent = current_target_object = None
     if actions and 'pick' in actions and actions['pick']:
-        current_intent      = "pick"
+        current_intent = "pick"
         current_target_object = actions['pick'][0]
 
     pose_sent = False
@@ -101,11 +101,11 @@ def main():
     print("Loop: q=quit, r=toggle detections")
 
     while True:
-        color_frame = capture_color_frame()          # ← NUEVO
+        color_frame = capture_color_frame()
         if color_frame is None:
             print("Sin frame color"); break
 
-        depth_frame = capture_depth_frame()          # ← NUEVO
+        depth_frame = capture_depth_frame()
 
         display_frame = color_frame.copy()
         depth_vis_color = None
@@ -114,8 +114,10 @@ def main():
             depth_vis_color = cv2.applyColorMap(depth_vis, cv2.COLORMAP_JET)
 
         if current_intent == "pick" and current_target_object and show_detections:
-            detections = detect_target_objects_realtime(
-                yolo_model, display_frame, current_target_object, False)
+            # detections = detect_target_objects_realtime(
+            #     yolo_model, display_frame, current_target_object, False)
+            
+            detections = [{'class': 'apple', 'confidence': 0.8567644357681274, 'bbox': [193, 123, 237, 169]}]
 
             if detections:
                 last_detection = max(detections, key=lambda d:d['confidence'])
@@ -151,7 +153,7 @@ def main():
             show_detections = not show_detections
             print("Detections", "ON" if show_detections else "OFF")
 
-    release_cameras()              # ← NUEVO
+    release_cameras()
     cv2.destroyAllWindows()
     if robot_comm_thread and robot_comm_thread.is_alive():
         robot_comm_thread.join(3)
