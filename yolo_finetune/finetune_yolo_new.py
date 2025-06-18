@@ -29,7 +29,7 @@ assert (DATA_ROOT / "train/images").exists(), "train/images not found"
 assert (DATA_ROOT / "train/labels").exists(), "train/labels not found"
 
 # 1. remap local class IDs 0-3 → 80-83 --------------------------------------------
-shift = {0: 80, 1: 81, 2: 82, 3: 83}
+shift = {0: 80, 1: 81, 2: 82, 3: 83, 4: 84, 5: 85}
 
 def remap_file(txt_path: Path) -> None:
     with open(txt_path) as f:
@@ -55,17 +55,17 @@ for split in ("train", "val", "valid"):
         for lbl in lbl_dir.rglob("*.txt"):
             remap_file(lbl)
 
-print("✅ label IDs rewritten to 80-83")
+print("✅ label IDs rewritten to 80-85")
 
 # 2. build combined.yaml -----------------------------------------------------------
 coco_names = [YOLO("yolov8n.pt").names[i] for i in range(80)]
-custom_names = ["screwdriver", "highlighter", "glue", "box"]     # order MUST match 80-83
+custom_names = ["screwdriver", "highlighter", "glue", "box", "ball", "rubik's cube"]
 
 yaml_cfg = {
     "train": str(DATA_ROOT / "train/images"),
     "val":   str((DATA_ROOT / "val/images") if (DATA_ROOT / "val").exists()
                  else (DATA_ROOT / "valid/images")),
-    "nc":    84,
+    "nc":    86,
     "names": coco_names + custom_names,
 }
 
@@ -73,7 +73,7 @@ yaml_path = DATA_ROOT / "combined.yaml"
 with open(yaml_path, "w") as f:
     yaml.dump(yaml_cfg, f, sort_keys=False)
 
-print(f"✅ {yaml_path} written (84 classes)")
+print(f"✅ {yaml_path} written (85 classes)")
 
 # 3. fine-tune ---------------------------------------------------------------------
 model = YOLO("yolov8n.pt")          # replace with yolov8s/m/l/x.pt if desired
@@ -85,7 +85,7 @@ model.train(
     lr0=3e-3,                       # small LR so COCO weights stay stable
     freeze=10,                      # freeze first 10 layers (optional but helps)
     project=str(RUNS_DIR),
-    name="yolov8_4class",
+    name="yolov8_6class",
     exist_ok=True,
 )
 
