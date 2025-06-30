@@ -1,22 +1,15 @@
-"""
-benchmark_intent_models.py
-──────────────────────────
-Evaluates several LLMs on a 50-command pick-intent task, prints a summary
-table, and saves the numbers to slm_results.csv.
-
-Models that cannot be downloaded (gated / offline) are skipped gracefully.
-"""
 import os, ast, re, time, csv, torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
+# Models to test
 MODELS = [
     ("SmolLM2-1.7B", "HuggingFaceTB/SmolLM2-1.7B-Instruct", True),
     ("PHI-2",        "microsoft/phi-2",                     False),
     ("Qwen3-0.6B",   "Qwen/Qwen3-0.6B",                     True),
 ]
-# ───────── BETTER PROMPT (few-shot + tighter spec) ─────────
+
 PROMPT_TEMPLATE = (
     "### Instruction:\n"
     "You are an expert voice-command parser for a pick-and-place robot.\n"
@@ -51,10 +44,7 @@ PROMPT_TEMPLATE = (
 
 
 
-# ───────────── 50-sentence test set ─────────────
-# ───────────── 50-sentence evaluation set (single-object “pick” only) ─────────────
-# ───────── 50-sentence evaluation set (single-object, varied wording) ─────────
-# ───────── simpler 50-sentence evaluation set (single object, varied verbs) ────────
+# 50-sentence test set 
 TEST_SET = [
     # ---------- 25 positive (one object, short) ----------
     ("Bring the apple.",              {'pick': ['apple']}),
@@ -83,7 +73,7 @@ TEST_SET = [
     ("Grab the teddy bear.",          {'pick': ['bear']}),
     ("Bring the charger.",            {'pick': ['charger']}),
 
-    # ---------- 25 negative (unchanged) ----------
+    # ---------- 25 negative ----------
     ("What time is it?",              {}),
     ("Rotate ninety degrees.",        {}),
     ("Move forward.",                 {}),
@@ -110,13 +100,7 @@ TEST_SET = [
     ("Open the gripper.",             {}),
     ("I'm just thinking aloud.",      {}),
 ]
-# ────────────────────────────────────────────────────────────────────────────────
 
-# ───────────────────────────────────────────────────────────────────────────────
-
-# ─────────────────────────────────────────────────────────────────────────────────
-
-# ───────────── helpers ─────────────
 def _prompt(cmd: str) -> str:
     return PROMPT_TEMPLATE.format(command=cmd)
 
@@ -152,10 +136,9 @@ def _predict(model, tok, cmd: str, chat: bool):
             tokenize=False, add_generation_prompt=True, enable_thinking=False
         )
     inp = tok(p, return_tensors="pt").to(model.device)
-    out = model.generate(**inp, max_new_tokens=64)   # greedy decoding
+    out = model.generate(**inp, max_new_tokens=64)
     return _extract_dict(tok.decode(out[0], skip_special_tokens=True))
 
-# ───────────── main benchmark ─────────────
 def main():
     print(f"Running on {DEVICE}\n")
     results = []
@@ -164,7 +147,6 @@ def main():
         print(f"→ Loading {label} …", flush=True)
         try:
             tok = AutoTokenizer.from_pretrained(ckpt, padding_side="left")
-            # silence pad-token warnings (esp. PHI-2)
             if tok.pad_token is None:
                 tok.pad_token = tok.eos_token
             model = AutoModelForCausalLM.from_pretrained(ckpt).to(DEVICE).eval()
@@ -193,13 +175,13 @@ def main():
 
 
         acc = correct / len(TEST_SET)
-        avg = (elapsed / len(TEST_SET)) * 1000  # ms
+        avg = (elapsed / len(TEST_SET)) * 1000
         results.append((label, acc, avg, correct_pos, correct_neg, wrong_examples))
 
         del model
         torch.cuda.empty_cache()
 
-    # ─── save CSV ────────────────────────────────────────────
+    # Save CSV with results
     with open("slm_results.csv", "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["model", "accuracy", "avg_latency_ms"])
@@ -208,7 +190,6 @@ def main():
                         "" if acc is None else f"{acc:.4f}",
                         "" if lat is None else f"{lat:.0f}"])
 
-    # ─── pretty print ───────────────────────────────────────
     print("\n┌──────────────────────────────┬───────────┬─────────────────────────┐")
     print(  "│ Model                        │ Accuracy  │ P✓ / N✓ / Avg Lat (ms) │")
     print(  "├──────────────────────────────┼───────────┼─────────────────────────┤")
@@ -216,7 +197,7 @@ def main():
         acc_txt = f"{acc*100:7.2f}%" if acc is not None else "   N/A "
         mix_txt = f"{p_ok:2d}/25 {n_ok:2d}/25  {lat:8.0f}" if acc is not None else "      N/A        "
         print(f"│ {lbl:<28}  │ {acc_txt} │ {mix_txt} │")
-    print(  "└──────────────────────────────┴───────────┴─────────────────────────┘")
+    print(  "└──────────────────────────────┴──────────┴─────────────────────────┘")
     print("\nSaved results to slm_results.csv")
 
     for lbl, _, _, _, _, wrong in results:

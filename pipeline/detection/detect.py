@@ -4,9 +4,10 @@ import matplotlib.pyplot as plt
 
 def detect_target_objects(yolo_model, image_path, target_object, show_image=True):
     """
-    Detects objects in an image using YOLOv8 and filters results for the target object.
+    Detects objects in a static image using YOLOv8 and filters results for the target object.
     Draws bounding boxes on the matching objects (with confidence ≥ threshold).
-    Returns a list of detections.
+    Returns:
+        list: list of dictionaries, where each represent a detected object containing class, confidence and bbox..
     """
     image = cv2.imread(image_path)
     if image is None:
@@ -44,8 +45,10 @@ def detect_target_objects(yolo_model, image_path, target_object, show_image=True
 
 def detect_target_objects_realtime(yolo_model, frame, target_object, show_image=False):
     """
-    Detects objects in a real-time frame using YOLOv8, draws bounding boxes
-    on the matching objects (modifies the frame in-place), and returns the list of detections.
+    Detects objects in a real-time video frame using YOLOv8, draws bounding boxes
+    on the matching objects (modifies the frame in-place).
+    Returns:
+        list: list of dictionaries, where each represent a detected object containing class, confidence and bbox.
     """
     if frame is None:
         print("Error: Received None frame for detection!")

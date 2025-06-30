@@ -39,11 +39,9 @@ with time_block("load_calibration"):
     print("Cam origin in flange (m):", T_cam2fl[:3, 3])
     print("Cam optical axis in flange:", T_cam2fl[:3, 2])
 
-
-
     print("[INFO] Loaded camera intrinsics and T_cam2flange.")
     
-
+# Device setting
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"[INFO] Using device: {device}")
 
@@ -69,12 +67,6 @@ with time_block("load_sam"):
     print("[INFO] SAM loaded.")
 
 # 4) SLM - command extraction
-# with time_block("load_slm"):
-#     ckpt = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
-#     slm_tokenizer = AutoTokenizer.from_pretrained(ckpt)
-#     slm_model     = AutoModelForCausalLM.from_pretrained(ckpt).to(device)
-#     print("[INFO] LLM loaded.")
-
 with time_block("load_slm"):
     ckpt = "Qwen/Qwen3-0.6B"
     slm_tokenizer = AutoTokenizer.from_pretrained(ckpt)
@@ -85,10 +77,11 @@ with time_block("load_slm"):
 UPLOAD_FOLDER = "/home/lab/Desktop/TFG/app/uploads"
 AUDIO_EXT     = ".mp3"
 pix_per_mm    = 3.2
-max_width_mm  = 100
+max_width_mm  = 100 # Maximum width of the gripper in mm.
 base_open_px  = int(max_width_mm * pix_per_mm)
 
 # ── GLOBAL STATE ───────────────────────────────────────────────────
+# Variables to manage the state of the pipeline across different threads.
 pose_sent             = False
 robot_thread          = None
 current_intent        = None
@@ -99,8 +92,7 @@ latest_audio_file     = None
 
 def process_audio(path: str):
     """
-    Transcribe the latest .mp3 via Whisper, extract intent+object using LLM,
-    set global current_intent & current_target_object.
+    Handles an audio file: transcribes it, extracts intent, and updates the global state.
     """
     global current_intent, current_target_object, pose_sent, latest_audio_file
 
@@ -130,8 +122,7 @@ def process_audio(path: str):
 
 def monitor_upload_folder():
     """
-    Watches UPLOAD_FOLDER for new .mp3 files; whenever a new one arrives,
-    calls process_audio() on it.
+    A background thread that watches the upload folder for new audio files.
     """
     global latest_audio_file
     while True:
@@ -146,8 +137,7 @@ def monitor_upload_folder():
 
 def project_pixel_to_table(u: float, v: float, T_base_tcp: np.ndarray):
     """
-    Given a pixel (u, v), undistort → build ray in camera coords → transform to base → intersect with z=0
-    Returns [X, Y, Zflange], or None if no valid intersection.
+    Projects a pixel coordinate from the camera image to a 3D point on the table plane (Z=0).
     """
     xn, yn = cv2.undistortPoints(np.array([[[u, v]]], np.float64), K, dist).reshape(-1)
     ray_cam = np.array([xn, yn, 1.0], dtype=np.float64)
@@ -195,13 +185,16 @@ def main():
 
         display_frame = color_frame.copy()
 
+        # If there is a "pick" command, run vision pipeline.
         if current_intent == "pick" and current_target_object:
+            # Detection with YOLO
             with time_block("yolo_detection"):
                 detections = detect_target_objects_realtime(
                     yolo_model, display_frame, current_target_object, False
                 )
 
             if detections:
+                # Select the detection with the highest confidence.
                 last_det = max(detections, key=lambda d: d["confidence"])
                 bbox = last_det["bbox"]
                 conf = last_det["confidence"]
@@ -225,6 +218,7 @@ def main():
                               int(y2 * depth_frame.shape[0] / display_frame.shape[0]))
                         cv2.rectangle(depth_vis_color, (db[0], db[1]), (db[2], db[3]), (0, 255, 0), 2)
 
+                # Segmentation with SAM.
                 with time_block("sam_segmentation"):
                     sam_predictor.set_image(cv2.cvtColor(color_frame, cv2.COLOR_BGR2RGB))
                     masks, _, _ = sam_predictor.predict(
@@ -233,6 +227,7 @@ def main():
                     )
                     mask = masks[0]
 
+                # Grasp point calculation
                 with time_block("get_best_grasp"):
                     pts = np.column_stack(np.where(mask > 0))
                     if pts.size > 0:
@@ -275,6 +270,7 @@ def main():
                 if show_depth and depth_vis_color is not None:
                     cv2.imshow("Depth Camera Feed", depth_vis_color)
 
+                # Robot pose calculation and sending
                 if not pose_sent and centroid_rc is not None:
                     try:
                         with time_block("get_curr_pose"):
@@ -359,7 +355,7 @@ def main():
             else:
                 cv2.destroyWindow("Depth Camera Feed")
                 print("Depth view OFF")
-
+    # Clean up
     release_cameras()
     cv2.destroyAllWindows()
     if robot_thread and robot_thread.is_alive():

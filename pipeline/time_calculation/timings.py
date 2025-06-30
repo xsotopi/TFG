@@ -1,4 +1,3 @@
-# timing.py  – seconds version
 import time, csv, atexit, threading, collections
 from pathlib import Path
 
@@ -6,10 +5,19 @@ _TIMES = collections.defaultdict(list)
 _LOCK  = threading.Lock()
 
 class time_block:
-    """Usage:  with time_block('load_whisper'): ...  (records seconds)"""
-    def __init__(self, label): self.label = label
+    """
+    Context manager to time a block of code.
+    Usage:
+        with time_block("label"):
+            # code to time
+    This records the elapsed time in seconds for the labeled block and store under the "label" section.
+    """
+    def __init__(self, label): 
+        self.label = label
+
     def __enter__(self):
         self.t0 = time.perf_counter()
+        
     def __exit__(self, exc_type, exc_val, exc_tb):
         dt_s = time.perf_counter() - self.t0
         with _LOCK:

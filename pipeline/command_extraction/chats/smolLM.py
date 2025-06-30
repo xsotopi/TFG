@@ -5,9 +5,16 @@ import ast
 
 import re
 
+# Define checkpoint
 checkpoint = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
 
 def extract_intent_and_object(command):
+    """
+    Uses SmolLM model extract actions and objects from a command
+    Returns:
+        dict: Dictionary with actions and objects
+    """
+
     prompt = (
             f"You are an AI assistant that receives a natural language transcription of a voice command. Your task is to analyze the command and extract all the actions and their corresponding objects in the order they appear."
 
@@ -44,10 +51,9 @@ def extract_intent_and_object(command):
     return {}
 
 
-
-device = "cpu" # for GPU usage or "cpu" for CPU usage
+# Model loading and main execution
+device = "cpu"
 tokenizer = AutoTokenizer.from_pretrained(checkpoint)
-# for multiple GPUs install accelerate and do `model = AutoModelForCausalLM.from_pretrained(checkpoint, device_map="auto")`
 model = AutoModelForCausalLM.from_pretrained(checkpoint).to(device)
 
 command = "Take the apple from the fridge, place it in the table and then take the glass from the table and put it in the sink."

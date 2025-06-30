@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Voice Recorder</title>
+
+  <style>
+    body {
+      font-family: sans-serif;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; min-height:100vh; margin:0;
+      background-color:#f4f4f4; color:#333; padding:20px;
+      box-sizing:border-box;
+    }
+    h2 { color:#007bff; margin-bottom:20px; }
+
+    button, #languageInput {
+      padding:12px 24px; margin:10px; border:none;
+      border-radius:8px; font-size:16px;
+      box-shadow:0 2px 4px rgba(0,0,0,.1);
+      transition: background-color .3s ease;
+    }
+    button {
+      background-color:#007bff; color:#fff; cursor:pointer;
+    }
+    button:hover { background-color:#0056b3; }
+    button:disabled { background-color:#ccc; cursor:not-allowed; }
+
+    #languageInput {
+      background:#fff; border:1px solid #ccc; width:220px;
+    }
+
+    #languageDropdown {
+      position:absolute;
+      top:100%; left:0; right:0;
+      background:#fff; border:1px solid #ccc;
+      max-height:200px; overflow-y:auto;
+      border-radius:4px; box-shadow:0 2px 4px rgba(0,0,0,.1);
+      z-index:100;
+    }
+    #languageDropdown .item {
+      padding:8px 12px; cursor:pointer;
+    }
+    #languageDropdown .item:hover {
+      background-color:#f0f0f0;
+    }
+    .hidden { display:none; }
+
+    audio {
+      width:90%; max-width:400px; margin-top:20px;
+      border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,.1);
+    }
+    p#status {
+      margin-top:20px; font-size:16px; color:#555;
+      text-align:center;
+    }
+
+    @media (max-width:600px) {
+      h2 { font-size:24px; margin-bottom:15px; }
+      button, #languageInput { padding:10px 20px; font-size:14px; margin:8px; }
+      audio { width:100%; }
+      p#status { font-size:14px; }
+    }
+
+    .picker-wrapper {
+      position:relative;
+      display:inline-block;
+    }
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.4/dist/ffmpeg.min.js"></script>
+</head>
+<body>
+  <h2>Voice Recorder</h2>
+
+  <div class="picker-wrapper">
+    <input id="languageInput"
+           placeholder="Select language…"
+           title="Language of speech"
+           autocomplete="off"
+    />
+    <div id="languageDropdown" class="hidden"></div>
+  </div>
+
+  <div style="display:flex; flex-wrap:wrap; justify-content:center;">
+    <button id="recordBtn">Record</button>
+    <button id="stopBtn" disabled>Stop</button>
+    <button id="uploadBtn" disabled>Upload</button>
+  </div>
+
+  <audio id="audioPlayback" controls></audio>
+  <p id="status"></p>
+
+  <script>
+    // Full ISO→English map
+    const whisperLanguages = {
+      af:"Afrikaans", am:"Amharic", ar:"Arabic", as:"Assamese", az:"Azerbaijani",
+      ba:"Bashkir", be:"Belarusian", bg:"Bulgarian", bn:"Bengali", bo:"Tibetan",
+      br:"Breton", bs:"Bosnian", ca:"Catalan", cs:"Czech", cy:"Welsh", da:"Danish",
+      de:"German", el:"Greek", en:"English", es:"Spanish", et:"Estonian", eu:"Basque",
+      fa:"Persian", fi:"Finnish", fr:"French", gl:"Galician", gu:"Gujarati",
+      ha:"Hausa", haw:"Hawaiian", he:"Hebrew", hi:"Hindi", hr:"Croatian",
+      ht:"Haitian Creole", hu:"Hungarian", hy:"Armenian", id:"Indonesian",
+      is:"Icelandic", it:"Italian", ja:"Japanese", jw:"Javanese", ka:"Georgian",
+      kk:"Kazakh", km:"Khmer", kn:"Kannada", ko:"Korean", la:"Latin",
+      lb:"Luxembourgish", ln:"Lingala", lo:"Lao", lt:"Lithuanian",
+      lv:"Latvian", mg:"Malagasy", mi:"Maori", mk:"Macedonian",
+      ml:"Malayalam", mn:"Mongolian", mr:"Marathi", ms:"Malay",
+      mt:"Maltese", my:"Burmese", ne:"Nepali", nl:"Dutch", no:"Norwegian",
+      oc:"Occitan", pa:"Punjabi", pl:"Polish", ps:"Pashto", pt:"Portuguese",
+      ro:"Romanian", ru:"Russian", sa:"Sanskrit", sd:"Sindhi", si:"Sinhala",
+      sk:"Slovak", sl:"Slovenian", sn:"Shona", so:"Somali", sq:"Albanian",
+      sr:"Serbian", su:"Sundanese", sv:"Swedish", sw:"Swahili", ta:"Tamil",
+      te:"Telugu", tg:"Tajik", th:"Thai", tk:"Turkmen", tl:"Tagalog",
+      tr:"Turkish", tt:"Tatar", uk:"Ukrainian", ur:"Urdu", uz:"Uzbek",
+      vi:"Vietnamese", yi:"Yiddish", yo:"Yoruba", zh:"Chinese"
+    };
+
+    // Native‐name overrides for common ones
+    const nativeNames = {
+      es:"Español", de:"Deutsch", fr:"Français", zh:"中文", ja:"日本語",
+      ru:"Русский", ar:"العربية", pt:"Português", hi:"हिन्दी", ko:"한국어",
+      el:"Ελληνικά", it:"Italiano", ca:"Català", nl:"Nederlands", sv:"Svenska",
+      da:"Dansk", fi:"Suomi", no:"Norsk", pl:"Polski", cs:"Čeština",
+      sk:"Slovenčina", sl:"Slovenščina", hr:"Hrvatski", uk:"Українська",
+      tr:"Türkçe", vi:"Tiếng Việt", id:"Bahasa Indonesia", ms:"Melayu",
+      ro:"Română", hu:"Magyar", hy:"Հայերեն", bg:"Български", fa:"فارسی",
+      he:"עברית", th:"ไทย", bn:"বাংলা", mr:"मराठी", ta:"தமிழ்",
+      te:"తెలుగు", gu:"ગુજરાતી", kn:"ಕನ್ನಡ", ml:"മലയാളം", pa:"ਪੰਜਾਬੀ", ur:"اردو"
+    };
+
+    // Build languages array
+    const languages = Object.entries(whisperLanguages).map(([code, eng]) => ({
+      code,
+      eng,
+      native: nativeNames[code] || eng
+    }));
+
+    // Build reverse map for lookup
+    const reverseMap = {};
+    languages.forEach(({code, eng, native}) => {
+      reverseMap[eng.toLowerCase()]    = code;
+      reverseMap[native.toLowerCase()] = code;
+      reverseMap[code.toLowerCase()]   = code;
+    });
+
+    const input    = document.getElementById("languageInput");
+    const dropdown = document.getElementById("languageDropdown");
+
+    // Filter & render **all** matching items
+    function filterDropdown() {
+      const q = input.value.trim().toLowerCase();
+      dropdown.innerHTML = "";
+      for (let {code, eng, native} of languages) {
+        if (
+          !q ||
+          eng.toLowerCase().includes(q) ||
+          native.toLowerCase().includes(q) ||
+          code === q
+        ) {
+          const div = document.createElement("div");
+          div.className = "item";
+          div.textContent = (native === eng) ? eng : `${eng} (${native})`;
+          div.onclick = () => {
+            input.value = eng;
+            dropdown.classList.add("hidden");
+          };
+          dropdown.appendChild(div);
+        }
+      }
+      dropdown.classList.toggle("hidden", dropdown.children.length === 0);
+    }
+
+    input.addEventListener("input", filterDropdown);
+    input.addEventListener("focus", filterDropdown);
+    input.addEventListener("blur", () =>
+      setTimeout(() => dropdown.classList.add("hidden"), 200)
+    );
+
+    // Record & upload
+    let mediaRecorder, audioChunks = [], ffmpegInstance, NGROK_URL = "";
+
+    async function fetchNgrokUrl() {
+      try {
+        const r = await fetch("/get_ngrok_url");
+        NGROK_URL = (await r.json()).url;
+      } catch (e) { console.error("Error fetching ngrok URL:", e); }
+    }
+
+    async function loadFFmpeg() {
+      const { createFFmpeg, fetchFile } = FFmpeg;
+      const ffmpeg = createFFmpeg({ log: true });
+      await ffmpeg.load();
+      return { ffmpeg, fetchFile };
+    }
+
+    async function convertWebMtoMP3(webmBlob) {
+      if (!ffmpegInstance) ffmpegInstance = await loadFFmpeg();
+      const { ffmpeg, fetchFile } = ffmpegInstance;
+      ffmpeg.FS("writeFile", "input.webm", await fetchFile(webmBlob));
+      await ffmpeg.run(
+        "-i", "input.webm",
+        "-q:a", "5",
+        "-acodec", "libmp3lame",
+        "output.mp3"
+      );
+      const data = ffmpeg.FS("readFile", "output.mp3");
+      return new Blob([data.buffer], { type: "audio/mp3" });
+    }
+
+    document.getElementById("recordBtn").addEventListener("click", async () => {
+      const engName = input.value;
+      const lang    = reverseMap[engName.toLowerCase()];
+      if (!lang) {
+        alert("Please select a valid language.");
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunks = [];
+        mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstop = async () => {
+          const blob = new Blob(audioChunks, { type: "audio/webm" });
+          document.getElementById("audioPlayback").src = URL.createObjectURL(blob);
+          const mp3Blob = await convertWebMtoMP3(blob);
+          document.getElementById("uploadBtn").disabled = false;
+          document.getElementById("uploadBtn").onclick = () => uploadAudio(mp3Blob, lang);
+        };
+        mediaRecorder.start();
+        recordBtn.disabled = true;
+        stopBtn.disabled   = false;
+      } catch (e) {
+        console.error("Mic access error:", e);
+        alert("Microphone access denied.");
+      }
+    });
+
+    document.getElementById("stopBtn").addEventListener("click", () => {
+      if (mediaRecorder) {
+        mediaRecorder.stop();
+        recordBtn.disabled = false;
+        stopBtn.disabled   = true;
+      }
+    });
+
+    async function uploadAudio(blob, lang) {
+      if (!blob) { alert("No audio."); return; }
+      const form = new FormData();
+      form.append("file", new File([blob], `${lang}.mp3`, { type: "audio/mp3" }));
+      try {
+        document.getElementById("status").innerText = "Uploading…";
+        const res = await fetch(`${NGROK_URL}/upload`, { method: "POST", body: form });
+        const j   = await res.json();
+        document.getElementById("status").innerText = "Upload Success: " + j.message;
+      } catch (e) {
+        console.error("Upload failed:", e);
+        document.getElementById("status").innerText = "Upload Failed!";
+      }
+    }
+
+    fetchNgrokUrl();
+  </script>
+</body>
+</html>

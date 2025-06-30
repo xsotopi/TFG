@@ -1,5 +1,3 @@
-# send2robot2.py   (rename the file or the import so they match!)
-
 import socket
 import struct
 import cv2
@@ -7,12 +5,13 @@ import numpy as np
 import threading
 import queue
 
-UR_IP     = "192.168.0.102"
-RT_PORT   = 30003           # real-time interface (only ONE client allowed)
-POSE_PORT = 50000           # one single port the robot will connect to
+# --- Constants ---
+UR_IP     = "192.168.0.102" # IP adress of UR
+RT_PORT   = 30003           # real-time port of UR (RTDE)
+POSE_PORT = 50000           # port for sending poses to secondary monitor
 
 
-# ── REAL-TIME SOCKET (persistent) ────────────────────────────────────────────
+# Real-time socket connection
 try:
     rt_socket = socket.create_connection((UR_IP, RT_PORT), timeout=0.4)
     print(f"[INFO] Connected to UR RT port {RT_PORT}.")
@@ -23,23 +22,24 @@ except Exception as e:
 
 def get_tcp_pose_persistent():
     """
-    Read one packet from the already-open rt_socket and return T_base_fl (4×4).
+    Reads one data packet from the persistent real-time socket and extracts
+    the robot's current tool-center-point (TCP) pose.
+    Returns:
+        np.ndarray: 4x4 transformation matrix representing the TCP pose. 
     """
+
     if rt_socket is None:
         raise RuntimeError("RT socket not connected.")
 
-    # 1) packet length prefix (4 bytes, big-endian uint32)
     ln_bytes = rt_socket.recv(4)
     if len(ln_bytes) < 4:
         raise RuntimeError("RT stream closed.")
     ln = struct.unpack(">I", ln_bytes)[0]
 
-    # 2) actual packet
     buf = rt_socket.recv(ln - 4, socket.MSG_WAITALL)
     if len(buf) < ln - 4:
         raise RuntimeError("Incomplete RT packet.")
 
-    # 3) cartesian tool pose is at bytes 440–487 (6 doubles, big-endian)
     x, y, z, rx, ry, rz = struct.unpack(">6d", buf[440:488])
 
     R, _ = cv2.Rodrigues(np.array([rx, ry, rz], dtype=np.float64))
@@ -51,7 +51,7 @@ def get_tcp_pose_persistent():
 
 def send_pose_secondary_monitor(pose, port: int = POSE_PORT):
     """
-    Wait for the URScript to connect on *port* and send one line with the pose.
+    Sends a pose to the robot formatted as a string and then closes the connection.
     """
     # 1) open a tiny TCP server that the URScript will connect to
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -82,6 +82,9 @@ def send_pose_secondary_monitor(pose, port: int = POSE_PORT):
 pose_queue = queue.Queue()
 
 def _pose_server(host="0.0.0.0", port=POSE_PORT):
+    """
+    Persistent threaded server that sends poses to the robot continuously.
+    """
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     listener.bind((host, port))
@@ -98,13 +101,12 @@ def _pose_server(host="0.0.0.0", port=POSE_PORT):
         line = "(" + ", ".join(f"{v:.6f}" for v in pose) + ")\n"
         data = line.encode("utf-8")
 
-        while True:                              # retry loop
+        while True:                            
             try:
                 conn.sendall(data)
                 print(f"[POSE SERVER] Sent: {line.strip()}")
-                break                            # success → next pose
+                break
             except (BrokenPipeError, ConnectionResetError):
-                # robot closed link – wait for it to open a new one
                 try:
                     conn.close()
                 except Exception:
@@ -118,4 +120,5 @@ def _pose_server(host="0.0.0.0", port=POSE_PORT):
 
 
 def start_pose_server():
+    """Starts the pose server in a separate thread."""
     threading.Thread(target=_pose_server, daemon=True).start()

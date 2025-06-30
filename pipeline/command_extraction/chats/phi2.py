@@ -4,19 +4,20 @@ import time
 import ast
 
 def extract_intent_and_object(command):
+    """
+    Uses the PHI-2 model to extract actions and objects from a voice command.
+    """
     prompt = (
         f"You are an AI assistant that receives a natural language transcription of a voice command. Your task is to analyze the command and extract all the actions and their corresponding objects in the order they appear."
 
-        f"There are only three possible actions: 'pick', 'place'."
+        f"The possible action is 'pick'."
 
         f"Return the result as a JSON-like dictionary with the following structure:"
         f"{{"
         f"'pick': [list of objects in the order to pick them],"
-        f"'place': [list of locations to where place the objects],"
         f"}}"
 
         f"The movement pick, should only be referencing objects, not places, so things like apple, book, glass... tangible things"
-        f"The movement place, should only be referencing objects, not places, so things like apple, book, glass... tangible things"
 
         f"Provide only the the dictionary with the extracted actions and objects. Do not include any additional text or explanations."
         f"If there are no actions or objects in the command, return an empty dictionary."
@@ -35,13 +36,14 @@ def extract_intent_and_object(command):
         only_response = response.strip()
 
     try:
-        # Convert to actual Python dictionary
         response_dict = ast.literal_eval(only_response)
     except Exception as e:
         print("⚠️ Failed to parse model response into dictionary:", only_response)
         raise e
 
     return response_dict
+
+# Model loading and execution
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 

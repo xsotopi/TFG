@@ -1,3 +1,5 @@
+# Initial approach using sentence-transformers for command extraction which was discarded.
+
 from sentence_transformers import SentenceTransformer, util
 
 

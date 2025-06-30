@@ -1,6 +1,6 @@
 train: /home/lab/Desktop/TFG/save_images/train/images
 val: /home/lab/Desktop/TFG/save_images/val/images
-nc: 84
+nc: 86
 names:
 - person
 - bicycle
@@ -86,3 +86,5 @@ names:
 - highlighter
 - glue
 - box
+- ball
+- rubik's cube
