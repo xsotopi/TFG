@@ -2,7 +2,7 @@
 
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/68cc08a7-d02d-4620-b4d6-21f6bc5d5bc2" controls="controls" style="max-width: 800px;">
+  <video src="https://github.com/user-attachments/assets/68cc08a7-d02d-4620-b4d6-21f6bc5d5bc2" controls="controls" style="max-width: 500px;">
   </video>
 </p>
 
@@ -12,7 +12,7 @@ This repository contains the complete pipeline for a voice-controlled robotic ma
 The system integrates state-of-the-art machine learning models for each stage, from understanding the user's voice to precisely calculate how to grasp the object.
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/331cdb75-4039-4899-9752-cd8de9bd0778" width="800" alt="System Workflow Diagram">
+  <img src="https://github.com/user-attachments/assets/331cdb75-4039-4899-9752-cd8de9bd0778" width="500" alt="System Workflow Diagram">
 </p>
 
 ## Main pipeline
