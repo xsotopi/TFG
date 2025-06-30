@@ -1,4 +1,0 @@
-model,accuracy,avg_latency_ms
-SmolLM2-1.7B,0.5000,958
-PHI-2,0.0400,5658
-Qwen3-0.6B,0.7400,931
